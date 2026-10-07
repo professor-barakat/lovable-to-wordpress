@@ -185,26 +185,48 @@ class L2WP_ZIP_Analyzer {
      * 
      * @return array List of pages found
      */
-    private function detect_pages() {
-        $pages = array();
-        $pages_dir = $this->extract_path . 'src/pages/';
-        
+   private function detect_pages() {
+    $pages = array();
+
+    // Support both traditional Lovable projects and TanStack Start projects.
+    $possible_dirs = array(
+        $this->extract_path . 'src/pages/',
+        $this->extract_path . 'src/routes/',
+    );
+
+    foreach ($possible_dirs as $pages_dir) {
         if (!is_dir($pages_dir)) {
-            return $pages;
+            continue;
         }
-        
+
         $files = scandir($pages_dir);
-        
+
         foreach ($files as $file) {
             if ($file === '.' || $file === '..') {
                 continue;
             }
-            
+
+            // __root.tsx is a TanStack root layout, not a WordPress page.
+            if ($file === '__root.tsx' || $file === '__root.jsx') {
+                continue;
+            }
+
             $file_path = $pages_dir . $file;
-            
-            if (is_file($file_path) && (strpos($file, '.tsx') !== false || strpos($file, '.jsx') !== false)) {
-                $page_name = str_replace(array('.tsx', '.jsx'), '', $file);
-                
+
+            if (
+                is_file($file_path) &&
+                (
+                    substr($file, -5) === '.tsx' ||
+                    substr($file, -5) === '.jsx'
+                )
+            ) {
+                $page_name = preg_replace('/\.(tsx|jsx)$/', '', $file);
+
+                // Convert TanStack index route to Home.
+                if ($page_name === 'index') {
+                    $page_name = 'Home';
+                }
+
                 $pages[] = array(
                     'name' => $page_name,
                     'file' => $file,
@@ -214,9 +236,16 @@ class L2WP_ZIP_Analyzer {
                 );
             }
         }
-        
-        return $pages;
+
+        // If pages were found in one supported directory,
+        // don't scan the other directory to avoid duplicates.
+        if (!empty($pages)) {
+            break;
+        }
     }
+
+    return $pages;
+}
     
     /**
      * Detect components in src/components directory
